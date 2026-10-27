@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Team GPS Command</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17212b;background:#f4f6f8}
+*{box-sizing:border-box}body{margin:0}header{background:#132b42;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:20px;margin:0}header small{opacity:.8}.wrap{padding:14px;max-width:1500px;margin:auto}.notice{background:#fff8e6;border:1px solid #ead8a4;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:12px}.panel{background:white;border:1px solid #dce2e7;border-radius:12px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:12px 14px;border-bottom:1px solid #e5e9ed}.controls{display:flex;gap:8px;flex-wrap:wrap;padding:12px}.controls input,.controls select,.controls button, input,select,textarea{font:inherit;border:1px solid #cbd4dc;border-radius:8px;padding:8px;background:white;max-width:100%}button{cursor:pointer}button.primary{background:#155e9b;color:white;border-color:#155e9b}button:disabled{opacity:.5;cursor:not-allowed}#map{height:520px;width:100%;background:#e9eff2}.mapfoot{font-size:12px;color:#5b6873;padding:8px 12px}.cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;padding:10px}.teamcard{border:1px solid #dfe5e9;border-radius:9px;padding:9px;font-size:12px;min-width:0}.teamname{font-weight:700;font-size:13px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.muted{color:#65727d}.status{font-weight:650}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px}.stat{background:#f4f7f9;border-radius:9px;padding:10px}.stat strong{display:block;font-size:20px}.stat span{font-size:12px;color:#64717c}.tablewrap{overflow:auto;max-height:360px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid #edf0f2;padding:8px;white-space:nowrap}th{position:sticky;top:0;background:#f8fafb;z-index:1}.rightcol{display:flex;flex-direction:column;gap:12px}.eventlist{max-height:290px;overflow:auto;padding:0 12px}.event{padding:9px 0;border-bottom:1px solid #edf0f2;font-size:12px}.pill{font-size:11px;border-radius:20px;padding:3px 7px;background:#eaf1f7}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px}.formgrid label{font-size:12px;color:#596671;display:flex;flex-direction:column;gap:4px}.full{grid-column:1/-1}.small{font-size:12px}.footer{font-size:12px;color:#64717c;padding:12px 2px}.teammarker{border:2px solid white;border-radius:50%;width:18px;height:18px;box-shadow:0 1px 5px #334;display:block}.locmarker{background:#fff;border:2px solid #394956;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px #555}.error{color:#a32929}.ok{color:#167344}
+@media(max-width:900px){.layout{grid-template-columns:1fr}#map{height:420px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.rightcol{display:contents}.rightcol>.panel{margin-top:12px}}
+</style>
+</head>
+<body>
+<header><div><h1>Team GPS Command</h1><small>5 teams · 20 locations · geofence event log</small></div><div id="connection">Prototype · not connected to Sheets</div></header>
+<div class="wrap">
+<div class="notice"><b>Prototype limitation:</b> browser geolocation and geofencing work only while the team page is open and permitted to access location. iOS may suspend background tracking when locked or the browser is closed. Use this for a supervised pilot, not as a guaranteed background tracking system.</div>
+<div class="layout">
+<section class="panel">
+<h2>Command map</h2>
+<div class="controls">
+<button class="primary" id="startBtn">Start this device's GPS</button>
+<button id="stopBtn">Stop GPS</button>
+<button id="demoBtn">Run demo simulation</button>
+<button id="fitBtn">Fit all markers</button>
+</div>
+<div id="map"></div>
+<div class="mapfoot">Team markers show latest reported position. Numbered circles show configured locations and geofence radii.</div>
+<div class="stats">
+<div class="stat"><strong id="teamCount">0/5</strong><span>Teams reporting</span></div>
+<div class="stat"><strong id="activeCount">0</strong><span>Teams inside a geofence</span></div>
+<div class="stat"><strong id="eventCount">0</strong><span>Events this session</span></div>
+</div>
+<div class="cards" id="teamCards"></div>
+</section>
+<div class="rightcol">
+<section class="panel">
+<h2>Team device settings</h2>
+<div class="formgrid">
+<label>Team<select id="teamSelect"><option>Team 1</option><option>Team 2</option><option>Team 3</option><option>Team 4</option><option>Team 5</option></select></label>
+<label>Reporting mode<select id="modeSelect"><option value="gps">Real GPS</option><option value="demo">Demo only</option></select></label>
+<label class="full">Google Apps Script web app URL<input id="endpoint" placeholder="Paste deployed Apps Script URL (optional)"></label>
+<label class="full">Shared access token<input id="token" placeholder="Optional token configured in Apps Script"></label>
+<div class="full small muted">On each team iPhone, open this page, select its team, then start GPS. For a command-post display, leave the dashboard open on a separate device. Location events from team phones are sent to the configured endpoint when available.</div>
+</div>
+<div class="controls"><button class="primary" id="saveSettings">Save settings on this device</button><button id="exportBtn">Export events CSV</button><button id="clearBtn">Clear session events</button></div>
+</section>
+<section class="panel">
+<h2>Locations & geofences</h2>
+<div class="controls">
+<button id="addLocBtn">Add location</button><button id="exportLocBtn">Export locations CSV</button><button id="importLocBtn">Import locations CSV</button><input type="file" id="locFile" accept=".csv,text/csv" hidden>
+</div>
+<div class="formgrid">
+<label>Location name<input id="locName" placeholder="e.g. Site 01"></label>
+<label>Geofence radius (meters)<input id="locRadius" type="number" min="25" max="2000" value="100"></label>
+<label>Latitude<input id="locLat" type="number" step="any" placeholder="27.9506"></label>
+<label>Longitude<input id="locLng" type="number" step="any" placeholder="-82.4572"></label>
+</div>
+<div class="tablewrap"><table><thead><tr><th>Location</th><th>Radius</th><th>Coordinates</th><th></th></tr></thead><tbody id="locationsTable"></tbody></table></div>
+<div class="mapfoot">Starter locations are fictional demo points. Replace them with your actual 20 locations before use.</div>
+</section>
+<section class="panel">
+<h2>Latest events</h2><div class="eventlist" id="eventList"><div class="muted small">No events yet. Start GPS or run the demo.</div></div>
+</section>
+</div>
+</div>
+<div class="footer">Team GPS Command prototype. Keep location sharing limited to authorized operational use and notify team members that their locations are being tracked.</div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(() => {
+const colors=['#0077b6','#d9480f','#2b8a3e','#7048e8','#c2255c'];
+const demoCenter=[27.95,-82.46];
+let locations=Array.from({length:20},(_,i)=>({id:`L${String(i+1).padStart(2,'0')}`,name:`Demo Site ${String(i+1).padStart(2,'0')}`,lat:demoCenter[0]+(Math.floor(i/5)-1.5)*0.018+(i%2)*0.002,lng:demoCenter[1]+((i%5)-2)*0.022,radius:100}));
+let teams=Array.from({length:5},(_,i)=>({id:`Team ${i+1}`,lat:null,lng:null,lastSeen:null,inside:null,watchId:null,reporting:false}));
+let events=[]; let demoTimer=null; let locationLayers=[]; let teamLayers=[];
+const $=id=>document.getElementById(id);
+const map=L.map('map').setView(demoCenter,11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+function distance(a,b){const R=6371000,p=Math.PI/180,dLat=(b.lat-a.lat)*p,dLng=(b.lng-a.lng)*p;const x=Math.sin(dLat/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function fmt(t){return new Date(t).toLocaleString();}
+function currentTeam(){return teams.find(t=>t.id===$('teamSelect').value)||teams[0];}
+function saveLocal(){try{localStorage.setItem('tg_locations',JSON.stringify(locations));localStorage.setItem('tg_events',JSON.stringify(events.slice(-500)));localStorage.setItem('tg_settings',JSON.stringify({team:$('teamSelect').value,endpoint:$('endpoint').value,token:$('token').value}));}catch(e){}}
+function loadLocal(){try{const l=JSON.parse(localStorage.getItem('tg_locations'));if(Array.isArray(l)&&l.length)locations=l;const e=JSON.parse(localStorage.getItem('tg_events'));if(Array.isArray(e))events=e;const s=JSON.parse(localStorage.getItem('tg_settings'));if(s){$('teamSelect').value=s.team||'Team 1';$('endpoint').value=s.endpoint||'';$('token').value=s.token||'';}}catch(e){}}
+function eventLog(team,type,loc,point){
+ const ev={event_id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random(),timestamp:new Date().toISOString(),team:team.id,event_type:type,location_id:loc.id,location_name:loc.name,latitude:point.lat,longitude:point.lng,accuracy_m:point.accuracy??'',source:$('modeSelect').value};
+ events.unshift(ev);events=events.slice(0,500);saveLocal();renderEvents();renderStats();
+ sendToSheet(ev);
+}
+async function sendToSheet(ev){
+ const url=$('endpoint').value.trim(); if(!url)return;
+ const body={...ev,token:$('token').value.trim(),kind:'event'};
+ try{await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});$('connection').textContent='Sheets endpoint configured · delivery cannot be confirmed by browser';}
+ catch(e){$('connection').textContent='Sheets send failed · export CSV as fallback';}
+}
+function sendPosition(team,point){
+ team.lat=point.lat;team.lng=point.lng;team.lastSeen=new Date().toISOString();team.reporting=true;
+ const url=$('endpoint').value.trim();if(url){const body={kind:'position',token:$('token').value.trim(),team:team.id,timestamp:team.lastSeen,latitude:point.lat,longitude:point.lng,accuracy_m:point.accuracy??'',inside_location:team.inside||''};fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)}).catch(()=>{});}
+ updateGeofences(team,point);renderTeams();renderStats();renderMarkers();saveLocal();
+}
+function updateGeofences(team,point){
+ const nowInside=locations.find(l=>distance(point,l)<=l.radius)||null;
+ const old=team.inside?locations.find(l=>l.id===team.inside):null;
+ if(nowInside && (!old || nowInside.id!==old.id)){if(old)eventLog(team,'EXIT',old,point);team.inside=nowInside.id;eventLog(team,'ENTRY',nowInside,point);}
+ else if(old && (!nowInside || nowInside.id!==old.id)){eventLog(team,'EXIT',old,point);team.inside=nowInside?nowInside.id:null;if(nowInside)eventLog(team,'ENTRY',nowInside,point);}
+}
+function renderMarkers(){
+ locationLayers.forEach(x=>map.removeLayer(x));teamLayers.forEach(x=>map.removeLayer(x));locationLayers=[];teamLayers=[];
+ locations.forEach((l,i)=>{const marker=L.circleMarker([l.lat,l.lng],{radius:7,color:'#35434e',weight:2,fillColor:'#fff',fillOpacity:1}).addTo(map).bindPopup(`<b>${esc(l.name)}</b><br>${l.id}<br>Geofence: ${l.radius} m`);const ring=L.circle([l.lat,l.lng],{radius:l.radius,color:'#607d8b',weight:1,fillColor:'#90a4ae',fillOpacity:.12}).addTo(map);locationLayers.push(marker,ring);});
+ teams.forEach((t,i)=>{if(t.lat==null||t.lng==null)return;const icon=L.divIcon({className:'',html:`<span class="teammarker" style="background:${colors[i]}"></span>`,iconSize:[18,18],iconAnchor:[9,9]});const m=L.marker([t.lat,t.lng],{icon}).addTo(map).bindPopup(`<b>${t.id}</b><br>Last update: ${t.lastSeen?fmt(t.lastSeen):'—'}<br>Inside: ${esc((locations.find(l=>l.id===t.inside)||{}).name||'No geofence')}`);teamLayers.push(m);});
+}
+function renderTeams(){
+ $('teamCards').innerHTML=teams.map((t,i)=>`<div class="teamcard"><div class="teamname"><span class="dot" style="background:${colors[i]}"></span>${t.id}</div><div class="status">${t.inside?'At '+esc((locations.find(l=>l.id===t.inside)||{}).name||t.inside):t.reporting?'En route':'Not reporting'}</div><div class="muted">${t.lastSeen?fmt(t.lastSeen):'No GPS update'}</div></div>`).join('');
+}
+function renderStats(){$('teamCount').textContent=`${teams.filter(t=>t.reporting).length}/5`;$('activeCount').textContent=teams.filter(t=>t.inside).length;$('eventCount').textContent=events.length;}
+function renderEvents(){$('eventList').innerHTML=events.length?events.slice(0,60).map(e=>`<div class="event"><b>${esc(e.team)}</b> <span class="pill">${esc(e.event_type)}</span><br>${esc(e.location_name)} <span class="muted">· ${fmt(e.timestamp)}</span></div>`).join(''):'<div class="muted small">No events yet. Start GPS or run the demo.</div>';}
+function renderLocations(){$('locationsTable').innerHTML=locations.map(l=>`<tr><td><b>${esc(l.name)}</b><br><span class="muted">${l.id}</span></td><td>${l.radius} m</td><td>${l.lat.toFixed(5)}, ${l.lng.toFixed(5)}</td><td><button data-edit="${l.id}">Edit</button> <button data-delete="${l.id}">Delete</button></td></tr>`).join('');}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function renderAll(){renderMarkers();renderTeams();renderStats();renderEvents();renderLocations();}
+function fitAll(){const pts=locations.map(l=>[l.lat,l.lng]).concat(teams.filter(t=>t.lat!=null).map(t=>[t.lat,t.lng]));if(pts.length)map.fitBounds(pts,{padding:[25,25],maxZoom:14});}
+$('startBtn').onclick=()=>{if(!navigator.geolocation){alert('Geolocation is not supported by this browser.');return;}const t=currentTeam();if(t.watchId!==null)navigator.geolocation.clearWatch(t.watchId);t.reporting=true;$('connection').textContent='Requesting GPS permission…';t.watchId=navigator.geolocation.watchPosition(pos=>{const c=pos.coords;sendPosition(t,{lat:c.latitude,lng:c.longitude,accuracy:c.accuracy});$('connection').textContent='GPS active for '+t.id;},err=>{$('connection').textContent='GPS error: '+err.message;alert('GPS error: '+err.message+' Ensure Location Services are enabled and this page is served over HTTPS.');},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});renderTeams();};
+$('stopBtn').onclick=()=>{const t=currentTeam();if(t.watchId!==null)navigator.geolocation.clearWatch(t.watchId);t.watchId=null;t.reporting=false;renderTeams();renderStats();$('connection').textContent='GPS stopped for '+t.id;};
+$('demoBtn').onclick=()=>{if(demoTimer){clearInterval(demoTimer);demoTimer=null;$('demoBtn').textContent='Run demo simulation';return;} $('demoBtn').textContent='Stop demo simulation';teams.forEach((t,i)=>{if(t.lat==null){const l=locations[(i*3)%locations.length];t.lat=l.lat+(i+1)*0.0004;t.lng=l.lng+(i+1)*0.0004;t.reporting=true;}});demoTimer=setInterval(()=>{teams.forEach((t,i)=>{let target=locations[(Math.floor(Date.now()/8000)+i*3)%locations.length];const dx=target.lat-t.lat,dy=target.lng-t.lng;const d=Math.sqrt(dx*dx+dy*dy)||1;t.lat+=dx/d*0.0012;t.lng+=dy/d*0.0012;sendPosition(t,{lat:t.lat,lng:t.lng,accuracy:15});});},2500);};
+$('fitBtn').onclick=fitAll;
+$('saveSettings').onclick=()=>{saveLocal();$('connection').textContent=$('endpoint').value.trim()?'Sheets endpoint configured':'Settings saved locally';alert('Settings saved in this browser.');};
+$('addLocBtn').onclick=()=>{const name=$('locName').value.trim(),lat=Number($('locLat').value),lng=Number($('locLng').value),radius=Math.max(25,Number($('locRadius').value)||100);if(!name||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180){alert('Enter a name and valid latitude/longitude.');return;}locations.push({id:'L'+String(Math.max(0,...locations.map(l=>Number(l.id.slice(1))||0)+1)).padStart(2,'0'),name,lat,lng,radius});$('locName').value='';$('locLat').value='';$('locLng').value='';saveLocal();renderAll();fitAll();};
+$('locationsTable').onclick=e=>{const id=e.target.dataset.delete||e.target.dataset.edit;if(!id)return;const l=locations.find(x=>x.id===id);if(e.target.dataset.delete){if(confirm('Delete '+l.name+'?'))locations=locations.filter(x=>x.id!==id);}else{const name=prompt('Location name',l.name);if(name===null)return;const lat=prompt('Latitude',l.lat);if(lat===null)return;const lng=prompt('Longitude',l.lng);if(lng===null)return;const radius=prompt('Geofence radius in meters',l.radius);if(radius===null)return;Object.assign(l,{name,lat:Number(lat),lng:Number(lng),radius:Math.max(25,Number(radius)||100)});}saveLocal();renderAll();};
+function csv(rows){return rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');}
+function download(name,content,type='text/csv'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href);}
+$('exportBtn').onclick=()=>download('team-gps-events.csv',csv([['event_id','timestamp','team','event_type','location_id','location_name','latitude','longitude','accuracy_m','source'],...events.map(e=>[e.event_id,e.timestamp,e.team,e.event_type,e.location_id,e.location_name,e.latitude,e.longitude,e.accuracy_m,e.source])]));
+$('exportLocBtn').onclick=()=>download('team-gps-locations.csv',csv([['location_id','location_name','latitude','longitude','radius_m'],...locations.map(l=>[l.id,l.name,l.lat,l.lng,l.radius])]));
+$('importLocBtn').onclick=()=>$('locFile').click();
+$('locFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const lines=(await f.text()).trim().split(/\r?\n/);const parse=line=>{let out=[],cur='',q=false;for(let i=0;i<line.length;i++){if(line[i]==='"'&&line[i+1]==='"'){cur+='"';i++;}else if(line[i]==='"')q=!q;else if(line[i]===','&&!q){out.push(cur);cur='';}else cur+=line[i];}out.push(cur);return out;};const rows=lines.slice(1).map(parse).filter(r=>r.length>=4);locations=rows.map((r,i)=>({id:r[0]||'L'+String(i+1).padStart(2,'0'),name:r[1]||'Location '+(i+1),lat:Number(r[2]),lng:Number(r[3]),radius:Math.max(25,Number(r[4])||100)})).filter(l=>Number.isFinite(l.lat)&&Number.isFinite(l.lng));saveLocal();renderAll();fitAll();alert('Imported '+locations.length+' locations.');};
+$('clearBtn').onclick=()=>{if(confirm('Clear events from this browser session?')){events=[];saveLocal();renderEvents();renderStats();}};
+$('teamSelect').onchange=()=>{saveLocal();};
+loadLocal();renderAll();fitAll();
+})();
+</script>
+</body>
+</html>
